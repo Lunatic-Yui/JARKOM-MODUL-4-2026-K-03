@@ -61,3 +61,39 @@ nah untuk perhitugannya sendiri cukup mudah yaitu:
    **d. Menentukan Range IP Usable**
    * **IP Pertama:** Network ID + 1 $\rightarrow$ **`10.65.24.1`**.
    * **IP Terakhir:** Broadcast - 1 $\rightarrow$ **`10.65.24.126`**.
+
+## Penggabungan Subnet
+
+Untuk penggabungan subnet sendiri saya membagi menjadi 4 wing. Berikut wing sectionnya:
+
+![image](./assets/cidr/wing-section.png)
+
+nah pada spreadsheetnya:
+
+- wing bawah
+
+![image](./assets/cidr/wing-bawah.png)
+
+- wing kanan
+
+![image](./assets/cidr/wing-kanan.png)
+
+- wing kiri
+
+![image](./assets/cidr/wing-kiri.png)
+
+- wing atas
+
+![image](./assets/cidr/wing-atas.png)
+
+- Gabungan
+
+![image](./assets/cidr/gabungan.png)
+
+Kurang lebih pada cisconya sebagai berikut:
+
+- wing bawah
+![image](./assets/cidr/penggabungan-subnet-wing-bawah.png)
+
+- wing kanan
+![image](./assets/cidr/penggabungan-subnet-wing-kanan.png)
