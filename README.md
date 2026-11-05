@@ -13,7 +13,555 @@ Link spreadsheet: https://docs.google.com/spreadsheets/d/1hSZUKqg6CH7iY6-aKsmBk2
 
 # Pengerjaan
 
-## VLSM
+## GNS3 - VLSM
+
+Bagian saya (Dafa) adalah perhitungan subnetting menggunakan metode **VLSM (Variable Length Subnet Masking)** dan implementasinya pada **GNS3**. Berbeda dengan CIDR yang menggunakan penggabungan subnet (*route summarization* / *supernetting*) dari bawah ke atas, VLSM bekerja dengan cara membagi suatu blok alamat IP besar ke dalam subnet-subnet dengan panjang netmask yang bervariasi (*variable length*) sesuai dengan kebutuhan aktual tiap segmen jaringan secara presisi.
+
+Tujuan utama VLSM adalah **efisiensi pengalamatan IP**, sehingga tidak ada alamat yang terbuang sia-sia (*address wastage*). Hal ini selaras dengan narasi soal *Layer:04 — The Wired Expansion*, di mana Lain ingin mencegah Eiri memanfaatkan alamat yang terbuang sebagai celah keamanan.
+
+Beberapa referensi:
+- https://www.rfc-editor.org/info/rfc1878/
+- https://github.com/lab-kcks/modul-komdat-jarkom-2026/tree/main/Modul%204
+
+---
+
+### 1. Topologi Jaringan GNS3
+
+Topologi dibangun di atas **GNS3** menggunakan docker node **`ardhptr21/alpinet:latest`** / **`ardhptr21/debinet:latest`** dengan switch ethernet sebagai penghubung antar interface perangkat.
+
+Topologi GNS3 secara keseluruhan adalah sebagai berikut:
+
+![image](./assets/vlsm/topologi-vlsm-gns3.png)
+
+Jaringan *The Wired* ini terbagi menjadi 4 segmen utama:
+1. **Hub Pusat (Core) & Akses Internet:**
+   - **NAT1**: Satu-satunya gerbang koneksi ke dunia luar (internet).
+   - **Cyberia**: Router gateway yang terhubung langsung ke NAT1 dan melayani LAN Cyberia (JJ & MyuMyu).
+   - **Wired**: Router hub pusat yang menjadi persimpangan utama lalu lintas data menuju Sayap Kiri, Sayap Kanan, dan Sayap Bawah.
+   - **Switch2**: Segmen broadcast bersama (*shared multi-access segment*) yang menghubungkan router Wired, Psyche, Copland, dan Schumann.
+2. **Sayap Kiri (Left Wing):**
+   - **Psyche**: Melayani LAN Karl (700 host) & Lin (180 host).
+   - **Copland**: Melayani LAN Juri (31 host) & Masayuki (300 host).
+   - **Schumann & Accela**: Melayani LAN Akashic (3 host), serta router Accela yang melayani LAN Omnipresence (510 host) & Denpa (3 host).
+3. **Sayap Kanan (Right Wing - Navi):**
+   - **Navi**: Terhubung langsung ke router Wired dan melayani 3 segmen LAN: Switch6 (Alice 208 host, Reika 45 host), Switch7 (Taro 57 host), dan Switch8 (Yasuo 120 host, Miho 18 host, Kuma 4 host).
+4. **Sayap Bawah (Bottom Wing - Deep Wired Layer):**
+   - Jalur transit bertingkat dari router **Tachibana** $\rightarrow$ **Deus** $\rightarrow$ **Protocol7** $\rightarrow$ **Knights** $\rightarrow$ **Phantoma** $\rightarrow$ **Shibuya** tempat Lain & Mika berada. Masing-masing router melayani LAN entitasnya sendiri.
+
+---
+
+### 2. Analisis Kebutuhan Host & Perhitungan Subnet (Sheet: Rute)
+
+Sesuai aturan praktikum Modul 4 (Poin 8):
+$\text{Jumlah IP Tiap Subnet} = \text{Jumlah Host} + \text{Jumlah Interface Router pada Subnet Tersebut}$
+
+Rumus penentuan panjang prefix ($n$ bit host):
+$2^n - 2 \ge \text{Kebutuhan Host}$
+$\text{Prefix Netmask} = 32 - n$
+$\text{Block Size (Total Alamat IP)} = 2^{32 - \text{Prefix}} = 2^n$
+$\text{Shadow (Jumlah Host Usable)} = 2^n - 2$
+
+#### Tabel Rekapitulasi Kebutuhan Tiap Subnet (Sheet: Rute):
+
+| Subnet | Rute / Segmen Jaringan | Host | Router Iface | Total Kebutuhan | Prefix (CIDR) | Netmask | Shadow (Usable) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **A1** | Cyberia > Switch1 > JJ, MyuMyu | 125 | 1 (Cyberia) | **126** | **/25** | 255.255.255.128 | 126 |
+| **A2** | Cyberia > Wired | 0 | 2 (Cyberia, Wired) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A3** | Wired > Switch2 > Psyche, Copland, Schumann | 0 | 4 (Wired, Psy, Cop, Sch) | **4** | **/29** | 255.255.255.248 | 6 |
+| **A4** | Psyche > Switch3 > Karl, Lin | 880 | 1 (Psyche) | **881** | **/22** | 255.255.252.0 | 1022 |
+| **A5** | Copland > Juri | 31 | 1 (Copland) | **32** | **/26** | 255.255.255.192 | 62 |
+| **A6** | Copland > Switch4 > Masayuki | 300 | 1 (Copland) | **301** | **/23** | 255.255.254.0 | 510 |
+| **A7** | Schumann > Akashic | 3 | 1 (Schumann) | **4** | **/29** | 255.255.255.248 | 6 |
+| **A8** | Schumann > Accela | 0 | 2 (Schumann, Accela) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A9** | Accela > Switch5 > Omnipresence, Denpa | 513 | 1 (Accela) | **514** | **/22** | 255.255.252.0 | 1022 |
+| **A10** | Wired > Navi | 0 | 2 (Wired, Navi) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A11** | Navi > Switch6 > Alice, Reika | 253 | 1 (Navi) | **254** | **/24** | 255.255.255.0 | 254 |
+| **A12** | Navi > Switch7 > Taro | 57 | 1 (Navi) | **58** | **/26** | 255.255.255.192 | 62 |
+| **A13** | Navi > Switch8 > Yasuo, Miho, Kuma | 142 | 1 (Navi) | **143** | **/24** | 255.255.255.0 | 254 |
+| **A14** | Wired > Tachibana | 0 | 2 (Wired, Tachibana) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A15** | Tachibana > Switch9 > Collective, Ghost | 266 | 1 (Tachibana) | **267** | **/23** | 255.255.254.0 | 510 |
+| **A16** | Tachibana > Deus | 0 | 2 (Tachibana, Deus) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A17** | Deus > Switch10 > Lilith, Specter | 98 | 1 (Deus) | **99** | **/25** | 255.255.255.128 | 126 |
+| **A18** | Deus > Protocol7 | 0 | 2 (Deus, Protocol7) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A19** | Protocol7 > Switch11 > Chisa, Hodgeson | 32 | 1 (Protocol7) | **33** | **/26** | 255.255.255.192 | 62 |
+| **A20** | Protocol7 > Knights | 0 | 2 (Protocol7, Knights) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A21** | Knights > Eiri | 2 | 1 (Knights) | **3** | **/29** | 255.255.255.248 | 6 |
+| **A22** | Knights > Phantoma | 0 | 2 (Knights, Phantoma) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A23** | Phantoma > Switch12 > Semi | 14 | 1 (Phantoma) | **15** | **/27** | 255.255.255.224 | 30 |
+| **A24** | Phantoma > Shibuya | 0 | 2 (Phantoma, Shibuya) | **2** | **/30** | 255.255.255.252 | 2 |
+| **A25** | Shibuya > Switch13 > Lain, Mika | 61 | 1 (Shibuya) | **62** | **/26** | 255.255.255.192 | 62 |
+| **Total** | | | | **2828** | **/19** | **255.255.224.0** | **4138** |
+
+Bukti pengerjaan pada spreadsheet (Sheet: `Rute`):
+
+![image](./assets/vlsm/table-rute-vlsm.png)
+
+---
+
+### 3. Pohon Pembagian IP VLSM (VLSM Tree)
+
+Berdasarkan total kebutuhan $2828$ host (dengan total block size $4188$ alamat IP), netmask terkecil yang mampu memuat seluruh topologi adalah **/19** ($2^{13} = 8192$ IP). Dengan Prefix kelompok K-03 yaitu `10.65.x.x`, maka blok utama dimulai dari **`10.65.0.0/19`**.
+
+Prinsip alokasi pohon VLSM:
+Subnet dialokasikan berurutan dari **kebutuhan alamat terbesar ke terkecil**:
+1. **/22 (1024 IP)**: A4, A9
+2. **/23 (512 IP)**: A6, A15
+3. **/24 (256 IP)**: A11, A13
+4. **/25 (128 IP)**: A1, A17
+5. **/26 (64 IP)**: A25, A12, A19, A5
+6. **/27 (32 IP)**: A23
+7. **/29 (8 IP)**: A3, A7, A21
+8. **/30 (4 IP)**: A2, A8, A10, A14, A16, A18, A20, A22, A24
+
+Diagram pohon pembagian IP VLSM kelompok K-03:
+
+![image](./assets/vlsm/pohon-vlsm.png)
+
+---
+
+### 4. Tabel Pembagian IP - VLSM
+
+Setelah dilakukan pembagian menggunakan pohon VLSM, diperoleh tabel pengalamatan IP yang terurut dari alokasi terbesar hingga terkecil sebagai berikut:
+
+| Sort | Subnet | Network ID | CIDR | Netmask | Broadcast | Range IP Usable | Status |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 4 | **A4** | `10.65.0.0` | /22 | `255.255.252.0` | `10.65.3.255` | `10.65.0.1 - 10.65.3.254` | ✅ |
+| 9 | **A9** | `10.65.4.0` | /22 | `255.255.252.0` | `10.65.7.255` | `10.65.4.1 - 10.65.7.254` | ✅ |
+| 6 | **A6** | `10.65.8.0` | /23 | `255.255.254.0` | `10.65.9.255` | `10.65.8.1 - 10.65.9.254` | ✅ |
+| 15 | **A15** | `10.65.10.0` | /23 | `255.255.254.0` | `10.65.11.255` | `10.65.10.1 - 10.65.11.254` | ✅ |
+| 11 | **A11** | `10.65.12.0` | /24 | `255.255.255.0` | `10.65.12.255` | `10.65.12.1 - 10.65.12.254` | ✅ |
+| 13 | **A13** | `10.65.13.0` | /24 | `255.255.255.0` | `10.65.13.255` | `10.65.13.1 - 10.65.13.254` | ✅ |
+| 1 | **A1** | `10.65.14.0` | /25 | `255.255.255.128` | `10.65.14.127` | `10.65.14.1 - 10.65.14.126` | ✅ |
+| 17 | **A17** | `10.65.14.128` | /25 | `255.255.255.128` | `10.65.14.255` | `10.65.14.129 - 10.65.14.254` | ✅ |
+| 25 | **A25** | `10.65.15.0` | /26 | `255.255.255.192` | `10.65.15.63` | `10.65.15.1 - 10.65.15.62` | ✅ |
+| 12 | **A12** | `10.65.15.64` | /26 | `255.255.255.192` | `10.65.15.127` | `10.65.15.65 - 10.65.15.126` | ✅ |
+| 19 | **A19** | `10.65.15.128` | /26 | `255.255.255.192` | `10.65.15.191` | `10.65.15.129 - 10.65.15.190` | ✅ |
+| 5 | **A5** | `10.65.15.192` | /26 | `255.255.255.192` | `10.65.15.255` | `10.65.15.193 - 10.65.15.254` | ✅ |
+| 23 | **A23** | `10.65.16.0` | /27 | `255.255.255.224` | `10.65.16.31` | `10.65.16.1 - 10.65.16.30` | ✅ |
+| 3 | **A3** | `10.65.16.32` | /29 | `255.255.255.248` | `10.65.16.39` | `10.65.16.33 - 10.65.16.38` | ✅ |
+| 7 | **A7** | `10.65.16.40` | /29 | `255.255.255.248` | `10.65.16.47` | `10.65.16.41 - 10.65.16.46` | ✅ |
+| 21 | **A21** | `10.65.16.48` | /29 | `255.255.255.248` | `10.65.16.55` | `10.65.16.49 - 10.65.16.54` | ✅ |
+| 2 | **A2** | `10.65.16.56` | /30 | `255.255.255.252` | `10.65.16.59` | `10.65.16.57 - 10.65.16.58` | ✅ |
+| 8 | **A8** | `10.65.16.60` | /30 | `255.255.255.252` | `10.65.16.63` | `10.65.16.61 - 10.65.16.62` | ✅ |
+| 10 | **A10** | `10.65.16.64` | /30 | `255.255.255.252` | `10.65.16.67` | `10.65.16.65 - 10.65.16.66` | ✅ |
+| 14 | **A14** | `10.65.16.68` | /30 | `255.255.255.252` | `10.65.16.71` | `10.65.16.69 - 10.65.16.70` | ✅ |
+| 16 | **A16** | `10.65.16.72` | /30 | `255.255.255.252` | `10.65.16.75` | `10.65.16.73 - 10.65.16.74` | ✅ |
+| 18 | **A18** | `10.65.16.76` | /30 | `255.255.255.252` | `10.65.16.79` | `10.65.16.77 - 10.65.16.78` | ✅ |
+| 20 | **A20** | `10.65.16.80` | /30 | `255.255.255.252` | `10.65.16.83` | `10.65.16.81 - 10.65.16.82` | ✅ |
+| 22 | **A22** | `10.65.16.84` | /30 | `255.255.255.252` | `10.65.16.87` | `10.65.16.85 - 10.65.16.86` | ✅ |
+| 24 | **A24** | `10.65.16.88` | /30 | `255.255.255.252` | `10.65.16.91` | `10.65.16.89 - 10.65.16.90` | ✅ |
+
+Bukti pengerjaan pada spreadsheet (Sheet: `Pembagian IP - VLSM`):
+
+![image](./assets/vlsm/table-pembagian-ip-vlsm.png)
+
+---
+
+### 5. Konfigurasi Node & Routing GNS3
+
+Sesuai aturan praktikum Modul 4 (Poin 5), semua script diletakkan pada direktori root (`/root`) tiap node. Seluruh file executable dapat langsung diakses pada folder `scripts/gns3/`.
+
+#### A. Konfigurasi Router (Shell Script)
+
+```bash
+============================================================
+ROUTER Cyberia (/root/cyberia.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth1 -> LAN A1 (10.65.14.1/25)
+ip addr add 10.65.14.1/25 dev eth1
+ip link set eth1 up
+
+# eth2 -> A2 ke Wired (10.65.16.57/30)
+ip addr add 10.65.16.57/30 dev eth2
+ip link set eth2 up
+
+# eth0 -> NAT1 (Internet)
+udhcpc -i eth0
+
+# Routing ke seluruh jaringan internal The Wired
+ip route add 10.65.0.0/19 via 10.65.16.58 dev eth2
+
+# NAT Masquerade
+iptables -t nat -F
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+============================================================
+ROUTER Wired (/root/wired.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+ip addr flush dev eth3
+
+# eth0 -> A2 ke Cyberia (10.65.16.58/30)
+ip addr add 10.65.16.58/30 dev eth0
+ip link set eth0 up
+
+# eth1 -> A3 ke Switch2 (10.65.16.33/29)
+ip addr add 10.65.16.33/29 dev eth1
+ip link set eth1 up
+
+# eth2 -> A10 ke Navi (10.65.16.65/30)
+ip addr add 10.65.16.65/30 dev eth2
+ip link set eth2 up
+
+# eth3 -> A14 ke Tachibana (10.65.16.69/30)
+ip addr add 10.65.16.69/30 dev eth3
+ip link set eth3 up
+
+# Default route ke Cyberia
+ip route add default via 10.65.16.57 dev eth0
+
+# Routing Sayap Kiri (via Switch2)
+ip route add 10.65.0.0/22 via 10.65.16.34 dev eth1    # A4 (Psyche)
+ip route add 10.65.8.0/23 via 10.65.16.35 dev eth1    # A6 (Copland)
+ip route add 10.65.15.192/26 via 10.65.16.35 dev eth1 # A5 (Copland)
+ip route add 10.65.4.0/22 via 10.65.16.36 dev eth1   # A9 (Accela)
+ip route add 10.65.16.40/29 via 10.65.16.36 dev eth1 # A7 (Schumann)
+ip route add 10.65.16.60/30 via 10.65.16.36 dev eth1 # A8 (Schumann-Accela)
+
+# Routing Sayap Kanan (Navi)
+ip route add 10.65.12.0/24 via 10.65.16.66 dev eth2  # A11
+ip route add 10.65.13.0/24 via 10.65.16.66 dev eth2  # A13
+ip route add 10.65.15.64/26 via 10.65.16.66 dev eth2 # A12
+
+# Routing Sayap Bawah (Tachibana & Deep Layers)
+ip route add 10.65.10.0/23 via 10.65.16.70 dev eth3  # A15
+ip route add 10.65.14.128/25 via 10.65.16.70 dev eth3 # A17
+ip route add 10.65.15.0/26 via 10.65.16.70 dev eth3  # A25
+ip route add 10.65.15.128/26 via 10.65.16.70 dev eth3 # A19
+ip route add 10.65.16.0/27 via 10.65.16.70 dev eth3  # A23
+ip route add 10.65.16.48/29 via 10.65.16.70 dev eth3 # A21
+ip route add 10.65.16.72/30 via 10.65.16.70 dev eth3 # A16
+ip route add 10.65.16.76/30 via 10.65.16.70 dev eth3 # A18
+ip route add 10.65.16.80/30 via 10.65.16.70 dev eth3 # A20
+ip route add 10.65.16.84/30 via 10.65.16.70 dev eth3 # A22
+ip route add 10.65.16.88/30 via 10.65.16.70 dev eth3 # A24
+
+============================================================
+ROUTER Psyche (/root/psyche.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+
+# eth0 -> A3 (10.65.16.34/29), eth1 -> A4 (10.65.0.1/22)
+ip addr add 10.65.16.34/29 dev eth0
+ip link set eth0 up
+ip addr add 10.65.0.1/22 dev eth1
+ip link set eth1 up
+
+# Direct neighbor routes di Switch2
+ip route add 10.65.8.0/23 via 10.65.16.35 dev eth0
+ip route add 10.65.15.192/26 via 10.65.16.35 dev eth0
+ip route add 10.65.4.0/22 via 10.65.16.36 dev eth0
+ip route add 10.65.16.40/29 via 10.65.16.36 dev eth0
+ip route add 10.65.16.60/30 via 10.65.16.36 dev eth0
+ip route add default via 10.65.16.33 dev eth0
+
+============================================================
+ROUTER Copland (/root/copland.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A3 (10.65.16.35/29), eth1 -> A5 (10.65.15.193/26), eth2 -> A6 (10.65.8.1/23)
+ip addr add 10.65.16.35/29 dev eth0
+ip link set eth0 up
+ip addr add 10.65.15.193/26 dev eth1
+ip link set eth1 up
+ip addr add 10.65.8.1/23 dev eth2
+ip link set eth2 up
+
+# Direct neighbor routes di Switch2
+ip route add 10.65.0.0/22 via 10.65.16.34 dev eth0
+ip route add 10.65.4.0/22 via 10.65.16.36 dev eth0
+ip route add 10.65.16.40/29 via 10.65.16.36 dev eth0
+ip route add 10.65.16.60/30 via 10.65.16.36 dev eth0
+ip route add default via 10.65.16.33 dev eth0
+
+============================================================
+ROUTER Schumann (/root/schumann.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A3 (10.65.16.36/29), eth1 -> A7 (10.65.16.41/29), eth2 -> A8 (10.65.16.61/30)
+ip addr add 10.65.16.36/29 dev eth0
+ip link set eth0 up
+ip addr add 10.65.16.41/29 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.61/30 dev eth2
+ip link set eth2 up
+
+# Route ke Accela LAN
+ip route add 10.65.4.0/22 via 10.65.16.62 dev eth2
+# Direct neighbor routes di Switch2
+ip route add 10.65.0.0/22 via 10.65.16.34 dev eth0
+ip route add 10.65.8.0/23 via 10.65.16.35 dev eth0
+ip route add 10.65.15.192/26 via 10.65.16.35 dev eth0
+ip route add default via 10.65.16.33 dev eth0
+
+============================================================
+ROUTER Accela (/root/accela.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+
+# eth0 -> A8 (10.65.16.62/30), eth1 -> A9 (10.65.4.1/22)
+ip addr add 10.65.16.62/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.4.1/22 dev eth1
+ip link set eth1 up
+ip route add default via 10.65.16.61 dev eth0
+
+============================================================
+ROUTER Navi (/root/navi.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+ip addr flush dev eth3
+
+# eth0 -> A10 (10.65.16.66/30), eth1 -> A11 (10.65.12.1/24), eth2 -> A12 (10.65.15.65/26), eth3 -> A13 (10.65.13.1/24)
+ip addr add 10.65.16.66/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.12.1/24 dev eth1
+ip link set eth1 up
+ip addr add 10.65.15.65/26 dev eth2
+ip link set eth2 up
+ip addr add 10.65.13.1/24 dev eth3
+ip link set eth3 up
+ip route add default via 10.65.16.65 dev eth0
+
+============================================================
+ROUTER Tachibana (/root/tachibana.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A14 (10.65.16.70/30), eth1 -> A15 (10.65.10.1/23), eth2 -> A16 (10.65.16.73/30)
+ip addr add 10.65.16.70/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.10.1/23 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.73/30 dev eth2
+ip link set eth2 up
+
+# Downstream routes ke Deus & cabang bawah
+ip route add 10.65.14.128/25 via 10.65.16.74 dev eth2
+ip route add 10.65.15.0/26 via 10.65.16.74 dev eth2
+ip route add 10.65.15.128/26 via 10.65.16.74 dev eth2
+ip route add 10.65.16.0/27 via 10.65.16.74 dev eth2
+ip route add 10.65.16.48/29 via 10.65.16.74 dev eth2
+ip route add 10.65.16.76/30 via 10.65.16.74 dev eth2
+ip route add 10.65.16.80/30 via 10.65.16.74 dev eth2
+ip route add 10.65.16.84/30 via 10.65.16.74 dev eth2
+ip route add 10.65.16.88/30 via 10.65.16.74 dev eth2
+ip route add default via 10.65.16.69 dev eth0
+
+============================================================
+ROUTER Deus (/root/deus.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A16 (10.65.16.74/30), eth1 -> A17 (10.65.14.129/25), eth2 -> A18 (10.65.16.77/30)
+ip addr add 10.65.16.74/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.14.129/25 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.77/30 dev eth2
+ip link set eth2 up
+
+# Downstream routes ke Protocol7 & cabang bawah
+ip route add 10.65.15.0/26 via 10.65.16.78 dev eth2
+ip route add 10.65.15.128/26 via 10.65.16.78 dev eth2
+ip route add 10.65.16.0/27 via 10.65.16.78 dev eth2
+ip route add 10.65.16.48/29 via 10.65.16.78 dev eth2
+ip route add 10.65.16.80/30 via 10.65.16.78 dev eth2
+ip route add 10.65.16.84/30 via 10.65.16.78 dev eth2
+ip route add 10.65.16.88/30 via 10.65.16.78 dev eth2
+ip route add default via 10.65.16.73 dev eth0
+
+============================================================
+ROUTER Protocol7 (/root/protocol7.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A18 (10.65.16.78/30), eth1 -> A19 (10.65.15.129/26), eth2 -> A20 (10.65.16.81/30)
+ip addr add 10.65.16.78/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.15.129/26 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.81/30 dev eth2
+ip link set eth2 up
+
+# Downstream routes ke Knights & cabang bawah
+ip route add 10.65.15.0/26 via 10.65.16.82 dev eth2
+ip route add 10.65.16.0/27 via 10.65.16.82 dev eth2
+ip route add 10.65.16.48/29 via 10.65.16.82 dev eth2
+ip route add 10.65.16.84/30 via 10.65.16.82 dev eth2
+ip route add 10.65.16.88/30 via 10.65.16.82 dev eth2
+ip route add default via 10.65.16.77 dev eth0
+
+============================================================
+ROUTER Knights (/root/knights.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A20 (10.65.16.82/30), eth1 -> A21 (10.65.16.49/29), eth2 -> A22 (10.65.16.85/30)
+ip addr add 10.65.16.82/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.16.49/29 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.85/30 dev eth2
+ip link set eth2 up
+
+# Downstream routes ke Phantoma & Shibuya
+ip route add 10.65.15.0/26 via 10.65.16.86 dev eth2
+ip route add 10.65.16.0/27 via 10.65.16.86 dev eth2
+ip route add 10.65.16.88/30 via 10.65.16.86 dev eth2
+ip route add default via 10.65.16.81 dev eth0
+
+============================================================
+ROUTER Phantoma (/root/phantoma.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+ip addr flush dev eth2
+
+# eth0 -> A22 (10.65.16.86/30), eth1 -> A23 (10.65.16.1/27), eth2 -> A24 (10.65.16.89/30)
+ip addr add 10.65.16.86/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.16.1/27 dev eth1
+ip link set eth1 up
+ip addr add 10.65.16.89/30 dev eth2
+ip link set eth2 up
+
+# Downstream route ke Shibuya (A25)
+ip route add 10.65.15.0/26 via 10.65.16.90 dev eth2
+ip route add default via 10.65.16.85 dev eth0
+
+============================================================
+ROUTER Shibuya (/root/shibuya.sh)
+============================================================
+#!/bin/sh
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ip addr flush dev eth0
+ip addr flush dev eth1
+
+# eth0 -> A24 (10.65.16.90/30), eth1 -> A25 (10.65.15.1/26)
+ip addr add 10.65.16.90/30 dev eth0
+ip link set eth0 up
+ip addr add 10.65.15.1/26 dev eth1
+ip link set eth1 up
+ip route add default via 10.65.16.89 dev eth0
+```
+
+#### B. Tabel Alamat IP Host / Client (Config di `/root` Tiap Node)
+
+| Subnet | Node / Host | Alamat IP | Netmask | Gateway | Script di /root |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| **A1** | JJ | `10.65.14.2` | `255.255.255.128` | `10.65.14.1` | `jj.sh` |
+| **A1** | MyuMyu | `10.65.14.3` | `255.255.255.128` | `10.65.14.1` | `myumyu.sh` |
+| **A4** | Karl | `10.65.0.2` | `255.255.252.0` | `10.65.0.1` | `karl.sh` |
+| **A4** | Lin | `10.65.0.3` | `255.252.0.0` | `10.65.0.1` | `lin.sh` |
+| **A5** | Juri | `10.65.15.194` | `255.255.255.192` | `10.65.15.193` | `juri.sh` |
+| **A6** | Masayuki | `10.65.8.2` | `255.255.254.0` | `10.65.8.1` | `masayuki.sh` |
+| **A7** | Akashic | `10.65.16.42` | `255.255.255.248` | `10.65.16.41` | `akashic.sh` |
+| **A9** | Omnipresence | `10.65.4.2` | `255.255.252.0` | `10.65.4.1` | `omnipresence.sh` |
+| **A9** | Denpa | `10.65.4.3` | `255.255.252.0` | `10.65.4.1` | `denpa.sh` |
+| **A11** | Alice | `10.65.12.2` | `255.255.255.0` | `10.65.12.1` | `alice.sh` |
+| **A11** | Reika | `10.65.12.3` | `255.255.255.0` | `10.65.12.1` | `reika.sh` |
+| **A12** | Taro | `10.65.15.66` | `255.255.255.192` | `10.65.15.65` | `taro.sh` |
+| **A13** | Yasuo | `10.65.13.2` | `255.255.255.0` | `10.65.13.1` | `yasuo.sh` |
+| **A13** | Miho | `10.65.13.3` | `255.255.255.0` | `10.65.13.1` | `miho.sh` |
+| **A13** | Kuma | `10.65.13.4` | `255.255.255.0` | `10.65.13.1` | `kuma.sh` |
+| **A15** | Collective | `10.65.10.2` | `255.255.254.0` | `10.65.10.1` | `collective.sh` |
+| **A15** | Ghost | `10.65.10.3` | `255.255.254.0` | `10.65.10.1` | `ghost.sh` |
+| **A17** | Lilith | `10.65.14.130` | `255.255.255.128` | `10.65.14.129` | `lilith.sh` |
+| **A17** | Specter | `10.65.14.131` | `255.255.255.128` | `10.65.14.129` | `specter.sh` |
+| **A19** | Chisa | `10.65.15.130` | `255.255.255.192` | `10.65.15.129` | `chisa.sh` |
+| **A19** | Hodgeson | `10.65.15.131` | `255.255.255.192` | `10.65.15.129` | `hodgeson.sh` |
+| **A21** | Eiri | `10.65.16.50` | `255.255.255.248` | `10.65.16.49` | `eiri.sh` |
+| **A23** | Semi | `10.65.16.2` | `255.255.255.224` | `10.65.16.1` | `semi.sh` |
+| **A25** | Lain | `10.65.15.2` | `255.255.255.192` | `10.65.15.1` | `lain.sh` |
+| **A25** | Mika | `10.65.15.3` | `255.255.255.192` | `10.65.15.1` | `mika.sh` |
+
+Contoh salah satu script client (`/root/lain.sh`):
+```bash
+#!/bin/sh
+ip addr flush dev eth0
+ip addr add 10.65.15.2/26 dev eth0
+ip link set eth0 up
+ip route add default via 10.65.15.1 dev eth0
+```
+
+---
+
+### 6. Hasil Routing Table & Pengujian Konektivitas (GNS3)
+
+#### A. Tabel Routing pada Node Router (Kernel IP Routing Table)
+Tabel routing pada router Wired, Cyberia, dan Tachibana menunjukkan seluruh prefix subnet internal terdaftar dengan interface dan next-hop gateway yang tepat:
+
+![image](./assets/vlsm/gns3-routing-table.png)
+
+#### B. Pengujian Ping Antar Seluruh Node (Ping Success)
+Pengujian konektivitas dilakukan antar node yang berada di posisi paling ujung maupun lintas segmen:
+- Ping dari **Lain** (lapisan terdalam Shibuya, subnet A25) menuju **Cyberia** (10.65.14.1) dan **JJ** (10.65.14.2) $\rightarrow$ **0% packet loss**.
+- Ping dari **Lain** menuju **Karl** (Sayap Kiri, subnet A4) $\rightarrow$ **0% packet loss**.
+- Ping dari **Karl** menuju **Alice** (Sayap Kanan, subnet A11) $\rightarrow$ **0% packet loss**.
+- Ping dari **Alice** menuju **Masayuki** (Sayap Kiri, subnet A6) $\rightarrow$ **0% packet loss**.
+
+Hasil pengujian membuktikan bahwa pembagian IP VLSM dan tabel routing yang diterapkan telah menghubungkan seluruh entitas jaringan tanpa ada yang terisolasi:
+
+![image](./assets/vlsm/gns3-ping-success.png)
+
+File pengerjaan:
+- File Spreadsheet Kelompok: [kelompok_k03.xlsx](./kelompok_k03.xlsx)
+- File CSV Rute: [kelompok_k03_rute.csv](./kelompok_k03_rute.csv)
+- File CSV VLSM: [kelompok_k03_vlsm.csv](./kelompok_k03_vlsm.csv)
+- Folder Script Konfigurasi Router & Host GNS3: [scripts/gns3/](./scripts/gns3/)
+
+---
+
 
 ## Cisco Packet Tracer - CIDR
 
