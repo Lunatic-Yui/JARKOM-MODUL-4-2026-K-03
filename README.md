@@ -1036,3 +1036,77 @@ disini agak bruteforcing dan sebenernya ada kesalahn namun saya sudah perbaikin 
 ![image](./assets/cidr/Success.png)
 
 File: [Praktikum-Jarkom-K-08.pkt](./Praktikum-Jarkom-K-08.pkt)
+
+## Revisi - CIDR section
+
+Pada demo dengan assistent, terdapat permasalahan yang dimana tidak bisa mengeping 8.8.8.8 (or maybe bisa but... keknya ku lupa matiin simulator) jadi disini perbaikannya:
+
+- Ping 8.8.8.8
+
+Jadi disini saya mengconfig `cybertia` agar bisa menjadikan parent router untuk bisa ping 8.8.8.8
+
+```
+configure terminal
+interface loopback0
+ description Internet
+ ip address 8.8.8.8 255.255.255.255
+exit
+no ip route 0.0.0.0 0.0.0.0 10.65.24.129
+ip route 10.65.0.0 255.255.224.0 10.65.24.129
+end
+write memory
+```
+
+lalu pada wired dihubungkan confignya ke cybertia tersebut, confignya:
+
+```
+configure terminal
+ip route 0.0.0.0 0.0.0.0 10.65.24.130
+end
+write memory
+```
+
+Kemudian hasilnya sebagai berikut:
+
+![image](./assets/perbaikan/bukti-1-in-semi.png)
+
+![image](./assets/perbaikan/bukti-2-in-reika.png)
+
+file revisi pkt: [revisi-pkt](./Praktikum-Jarkom-K-08-revisi.pkt)
+
+- Pengelompokkan router... (iirc)
+
+1. Sayap Bawah (blok 10.65.16.0/22)
+B1 = A22 + A24 (tetangga di router Phantoma): A22 = 10.65.19.104/30 dan A24 = 10.65.19.108/30. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 104 = 01101|000 dan 108 = 01101|100, jadi 5 bit awal sama. Prefix = 24 + 5 = /29, NID = 10.65.19.104. Hasil: 10.65.19.104/29.
+B2 = B1 + A21 (tetangga di router Knights): B1 = 10.65.19.104/29 dan A21 = 10.65.19.96/29. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 104 = 0110|1000 dan 96 = 0110|0000, jadi 4 bit awal sama. Prefix = 24 + 4 = /28, NID = 10.65.19.96. Hasil: 10.65.19.96/28.
+B3 = B2 + A23 (tetangga di router Phantoma): B2 = 10.65.19.96/28 dan A23 = 10.65.19.64/27. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 96 = 01|100000 dan 64 = 01|000000, jadi 2 bit awal sama. Prefix = 24 + 2 = /26, NID = 10.65.19.64. Hasil: 10.65.19.64/26.
+B4 = B3 + A25 (tetangga di router Shibuya): B3 = 10.65.19.64/26 dan A25 = 10.65.19.0/26. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 64 = 0|1000000 dan 0 = 0|0000000, jadi 1 bit awal sama. Prefix = 24 + 1 = /25, NID = 10.65.19.0. Hasil: 10.65.19.0/25.
+B5 = A18 + A20 (tetangga di router Protocol7): A18 = 10.65.18.192/30 dan A20 = 10.65.18.196/30. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 192 = 11000|000 dan 196 = 11000|100, jadi 5 bit awal sama. Prefix = 24 + 5 = /29, NID = 10.65.18.192. Hasil: 10.65.18.192/29.
+B6 = A14 + A16 (tetangga di router Tachibana): A14 = 10.65.18.200/30 dan A16 = 10.65.18.204/30. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 200 = 11001|000 dan 204 = 11001|100, jadi 5 bit awal sama. Prefix = 24 + 5 = /29, NID = 10.65.18.200. Hasil: 10.65.18.200/29.
+B7 = B5 + B6 (tetangga di router Deus): B5 = 10.65.18.192/29 dan B6 = 10.65.18.200/29. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 192 = 1100|0000 dan 200 = 1100|1000, jadi 4 bit awal sama. Prefix = 24 + 4 = /28, NID = 10.65.18.192. Hasil: 10.65.18.192/28.
+B8 = A19 + B7 (tetangga di router Protocol7): A19 = 10.65.18.128/26 dan B7 = 10.65.18.192/28. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 128 = 1|0000000 dan 192 = 1|1000000, jadi 1 bit awal sama. Prefix = 24 + 1 = /25, NID = 10.65.18.128. Hasil: 10.65.18.128/25.
+B9 = A17 + B8 (tetangga di router Deus): A17 = 10.65.18.0/25 dan B8 = 10.65.18.128/25. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 0 = |00000000 dan 128 = |10000000, jadi 0 bit awal sama. Prefix = 24 + 0 = /24, NID = 10.65.18.0. Hasil: 10.65.18.0/24.
+B10 = B9 + B4 (tetangga di router Knights): B9 = 10.65.18.0/24 dan B4 = 10.65.19.0/25. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 18 = 0001001|0 dan 19 = 0001001|1, jadi 7 bit awal sama. Prefix = 16 + 7 = /23, NID = 10.65.18.0. Hasil: 10.65.18.0/23.
+B11 = A15 + B10 (tetangga di router Tachibana): A15 = 10.65.16.0/23 dan B10 = 10.65.18.0/23. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 16 = 000100|00 dan 18 = 000100|10, jadi 6 bit awal sama. Prefix = 16 + 6 = /22, NID = 10.65.16.0. Hasil: 10.65.16.0/22.
+Hasil akhir: B11 = 10.65.16.0/22, sama dengan blok sayap bawah yang dihitung dari total host.
+2. Sayap Kanan (blok 10.65.20.0/22)
+C1 = A11 + A12 (tetangga di router Navi): A11 = 10.65.20.0/24 dan A12 = 10.65.21.0/26. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 20 = 0001010|0 dan 21 = 0001010|1, jadi 7 bit awal sama. Prefix = 16 + 7 = /23, NID = 10.65.20.0. Hasil: 10.65.20.0/23.
+C2 = A13 + A10 (tetangga di router Navi): A13 = 10.65.22.0/24 dan A10 = 10.65.23.0/30. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 22 = 0001011|0 dan 23 = 0001011|1, jadi 7 bit awal sama. Prefix = 16 + 7 = /23, NID = 10.65.22.0. Hasil: 10.65.22.0/23.
+C3 = C1 + C2 (tetangga di router Navi): C1 = 10.65.20.0/23 dan C2 = 10.65.22.0/23. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 20 = 000101|00 dan 22 = 000101|10, jadi 6 bit awal sama. Prefix = 16 + 6 = /22, NID = 10.65.20.0. Hasil: 10.65.20.0/22.
+Hasil akhir: C3 = 10.65.20.0/22, sama dengan blok sayap kanan yang dihitung dari total host.
+3. Sayap Kiri (blok 10.65.0.0/20)
+D1 = A3 + A5 (tetangga di router Copland): A3 = 10.65.6.0/29 dan A5 = 10.65.6.64/26. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 0 = 0|0000000 dan 64 = 0|1000000, jadi 1 bit awal sama. Prefix = 24 + 1 = /25, NID = 10.65.6.0. Hasil: 10.65.6.0/25.
+D2 = D1 + A6 (tetangga di router Copland): D1 = 10.65.6.0/25 dan A6 = 10.65.4.0/23. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 6 = 000001|10 dan 4 = 000001|00, jadi 6 bit awal sama. Prefix = 16 + 6 = /22, NID = 10.65.4.0. Hasil: 10.65.4.0/22.
+D3 = A7 + A8 (tetangga di router Schumann): A7 = 10.65.8.0/29 dan A8 = 10.65.8.8/30. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 0 = 0000|0000 dan 8 = 0000|1000, jadi 4 bit awal sama. Prefix = 24 + 4 = /28, NID = 10.65.8.0. Hasil: 10.65.8.0/28.
+D4 = D3 + A9 (tetangga di router Accela): D3 = 10.65.8.0/28 dan A9 = 10.65.12.0/22. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 8 = 00001|000 dan 12 = 00001|100, jadi 5 bit awal sama. Prefix = 16 + 5 = /21, NID = 10.65.8.0. Hasil: 10.65.8.0/21.
+D5 = A4 + D2 (tetangga di router Psyche): A4 = 10.65.0.0/22 dan D2 = 10.65.4.0/22. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 0 = 00000|000 dan 4 = 00000|100, jadi 5 bit awal sama. Prefix = 16 + 5 = /21, NID = 10.65.0.0. Hasil: 10.65.0.0/21.
+D6 = D5 + D4 (tetangga di router Schumann): D5 = 10.65.0.0/21 dan D4 = 10.65.8.0/21. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 0 = 0000|0000 dan 8 = 0000|1000, jadi 4 bit awal sama. Prefix = 16 + 4 = /20, NID = 10.65.0.0. Hasil: 10.65.0.0/20.
+Hasil akhir: D6 = 10.65.0.0/20, sama dengan blok sayap kiri yang dihitung dari total host.
+4. Sayap Atas (blok 10.65.24.0/24)
+E1 = A1 + A2 (tetangga di router Cybertia): A1 = 10.65.24.0/25 dan A2 = 10.65.24.128/30. Oktet 1 sampai 3 sama (24 bit). Oktet ke-4 berbeda: 0 = |00000000 dan 128 = |10000000, jadi 0 bit awal sama. Prefix = 24 + 0 = /24, NID = 10.65.24.0. Hasil: 10.65.24.0/24.
+Hasil akhir: E1 = 10.65.24.0/24, sama dengan blok sayap atas yang dihitung dari total host.
+5. Penggabungan Antar Sayap (router pusat Wired)
+F1 = B11 + C3 (tetangga di router Wired): B11 = 10.65.16.0/22 dan C3 = 10.65.20.0/22. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 16 = 00010|000 dan 20 = 00010|100, jadi 5 bit awal sama. Prefix = 16 + 5 = /21, NID = 10.65.16.0. Hasil: 10.65.16.0/21.
+F2 = F1 + E1 (tetangga di router Wired): F1 = 10.65.16.0/21 dan E1 = 10.65.24.0/24. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 16 = 0001|0000 dan 24 = 0001|1000, jadi 4 bit awal sama. Prefix = 16 + 4 = /20, NID = 10.65.16.0. Hasil: 10.65.16.0/20.
+F3 = D6 + F2 (tetangga di router Wired): D6 = 10.65.0.0/20 dan F2 = 10.65.16.0/20. Oktet 1 sampai 2 sama (16 bit). Oktet ke-3 berbeda: 0 = 000|00000 dan 16 = 000|10000, jadi 3 bit awal sama. Prefix = 16 + 3 = /19, NID = 10.65.0.0. Hasil: 10.65.0.0/19.
+Hasil akhir: F3 = 10.65.0.0/19, satu route ringkasan yang mencakup seluruh jaringan.
