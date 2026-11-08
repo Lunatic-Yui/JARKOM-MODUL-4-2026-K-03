@@ -1087,78 +1087,110 @@ Kemudian hasilnya sebagai berikut:
 
 file revisi pkt: [revisi-pkt](./Praktikum-Jarkom-K-08-revisi.pkt)
 
-- benerin routingnya, cara routingnya, dan confignya 
+- benerin routingnya (uh... should be udh bener but not efektif sih), cara routingnya, dan confignya 
 
-1. **Konfigurasi Routing**
+## Konfigurasi Routing
 
-   Seluruh router menggunakan **static routing** yang dikombinasikan dengan **default route** dan **route ringkasan (summary)**. Topologi berbentuk pohon tanpa loop sehingga hanya ada satu jalur ke setiap subnet, jadi static route sudah cukup tanpa trafik protokol routing. Pembagian IP per sayap membuat satu route dapat mewakili satu cabang sekaligus.
+Jadi disini semua router saya config pakai **static routing**, dikombinasikan dengan **default route** dan **route summary**. Alasannya karena topologinya berbentuk pohon (tree) dan tidak ada loop, jadi cuma ada satu jalur ke tiap subnet. Dengan begitu static route sudah cukup, ga perlu protokol routing (OSPF, RIP, dll). Pembagian IP per sayap juga bikin satu route bisa mewakili satu cabang sekaligus.
 
-   **a. Prinsip Routing**
-   * **Router ujung** (Navi, Accela, Shibuya) hanya memakai satu default route ke router di atasnya.
-   * **Router percabangan** (Tachibana, Deus, Protocol7, Knights, Phantoma) memakai satu route ringkasan ke arah bawah dan satu default route ke arah atas.
-   * **Wired (router pusat)** memakai satu route ringkasan per sayap (Bawah, Kanan, Atas) dan tiga route untuk sayap Kiri, karena jalurnya lewat tiga router berbeda (Psyche, Copland, Schumann).
-   * **Psyche, Copland, Schumann** berbagi segmen A3 dengan Wired, sehingga masing-masing punya route spesifik ke dua router lainnya dan default route ke Wired.
-   * **Akses internet (`8.8.8.8`)** disimulasikan dengan interface loopback di Cybertia. Wired memakai default route ke Cybertia, dan Cybertia memakai route ringkasan `10.65.0.0/19` ke Wired untuk jalur balasan.
+### Prinsip Routing
 
-   **b. Perintah yang Digunakan**
-   * **Alamat interface:**
-     ```
-     interface <port>
-      ip address <ip> <netmask>
-      no shutdown
-     ```
-   * **Static route:** `ip route <network> <netmask> <next-hop>`
-   * **Default route:** `ip route 0.0.0.0 0.0.0.0 <next-hop>`
-   * **Loopback (Cybertia):** `interface loopback0` lalu `ip address 8.8.8.8 255.255.255.255`
+- **Router ujung** (Navi, Accela, Shibuya) cukup pakai satu default route ke router di atasnya.
+- **Router percabangan** (Tachibana, Deus, Protocol7, Knights, Phantoma) pakai satu route summary ke arah bawah dan satu default route ke arah atas.
+- **Wired (router pusat)** pakai satu route summary per sayap (Bawah, Kanan, Atas). Khusus sayap Kiri ada tiga route, karena jalurnya lewat tiga router berbeda (Psyche, Copland, Schumann).
+- **Psyche, Copland, Schumann** satu segmen A3 dengan Wired, jadi masing-masing punya route spesifik ke dua router lainnya + default route ke Wired.
+- **Akses internet (`8.8.8.8`)** saya simulasikan pakai interface loopback di `cybertia`. Wired pakai default route ke Cybertia, dan Cybertia pakai route summary `10.65.0.0/19` ke Wired supaya paketnya bisa balik (jalur balasan).
 
-   **c. Daftar Route per Router**
-   * **Wired:**
-     `10.65.0.0/22` via `10.65.6.2` (A4, Psyche) |
-     `10.65.4.0/22` via `10.65.6.3` (A5 dan A6, Copland) |
-     `10.65.8.0/21` via `10.65.6.4` (A7, A8, A9, Schumann) |
-     `10.65.16.0/22` via `10.65.18.202` (sayap Bawah) |
-     `10.65.20.0/22` via `10.65.23.2` (sayap Kanan) |
-     `10.65.24.0/24` via `10.65.24.130` (sayap Atas) |
-     `0.0.0.0/0` via `10.65.24.130` (internet)
-   * **Cybertia:** `10.65.0.0/19` via `10.65.24.129`
-   * **Navi:** `0.0.0.0/0` via `10.65.23.1`
-   * **Psyche:** `10.65.4.0/22` via `10.65.6.3` | `10.65.8.0/21` via `10.65.6.4` | `0.0.0.0/0` via `10.65.6.1`
-   * **Copland:** `10.65.0.0/22` via `10.65.6.2` | `10.65.8.0/21` via `10.65.6.4` | `0.0.0.0/0` via `10.65.6.1`
-   * **Schumann:** `10.65.0.0/22` via `10.65.6.2` | `10.65.4.0/22` via `10.65.6.3` | `10.65.12.0/22` via `10.65.8.10` | `0.0.0.0/0` via `10.65.6.1`
-   * **Accela:** `0.0.0.0/0` via `10.65.8.9`
-   * **Tachibana:** `10.65.18.0/23` via `10.65.18.206` | `0.0.0.0/0` via `10.65.18.201`
-   * **Deus:** `10.65.18.128/26`, `10.65.18.196/30`, dan `10.65.19.0/25` via `10.65.18.194` | `0.0.0.0/0` via `10.65.18.205`
-   * **Protocol7:** `10.65.19.0/25` via `10.65.18.198` | `0.0.0.0/0` via `10.65.18.193`
-   * **Knights:** `10.65.19.0/25` via `10.65.19.106` | `0.0.0.0/0` via `10.65.18.197`
-   * **Phantoma:** `10.65.19.0/26` via `10.65.19.110` | `0.0.0.0/0` via `10.65.19.105`
-   * **Shibuya:** `0.0.0.0/0` via `10.65.19.109`
+### Perintah yang Dipakai
 
-   Total hanya **33 route** untuk 13 router. Jika setiap router menyimpan route ke semua subnet yang tidak terhubung langsung, dibutuhkan sekitar 300 route.
+- Alamat interface:
+  ```
+  interface <port>
+   ip address <ip> <netmask>
+   no shutdown
+  ```
+- Static route: `ip route <network> <netmask> <next-hop>`
+- Default route: `ip route 0.0.0.0 0.0.0.0 <next-hop>`
+- Loopback (Cybertia): `interface loopback0` lalu `ip address 8.8.8.8 255.255.255.255`
 
-   **d. Contoh Konfigurasi (Wired)**
-   ```
-   interface fa0/0
-    ip address 10.65.24.129 255.255.255.252
-    no shutdown
-   interface fa0/1
-    ip address 10.65.23.1 255.255.255.252
-    no shutdown
-   interface fa1/0
-    ip address 10.65.18.201 255.255.255.252
-    no shutdown
-   interface fa1/1
-    ip address 10.65.6.1 255.255.255.248
-    no shutdown
-   ip route 10.65.0.0 255.255.252.0 10.65.6.2
-   ip route 10.65.4.0 255.255.252.0 10.65.6.3
-   ip route 10.65.8.0 255.255.248.0 10.65.6.4
-   ip route 10.65.16.0 255.255.252.0 10.65.18.202
-   ip route 10.65.20.0 255.255.252.0 10.65.23.2
-   ip route 10.65.24.0 255.255.255.0 10.65.24.130
-   ip route 0.0.0.0 0.0.0.0 10.65.24.130
-   ```
+### Daftar Route per Router
 
-   **e. Verifikasi**
-   * `show ip interface brief` untuk memastikan semua interface `up/up`.
-   * `show ip route` untuk memastikan route static (`S`) dan default (`S*`) terpasang.
-   * `ping` dan `tracert` antar node, serta `ping 8.8.8.8`.
+- **Wired**
+  - `10.65.0.0/22` via `10.65.6.2` (A4, Psyche)
+  - `10.65.4.0/22` via `10.65.6.3` (A5 dan A6, Copland)
+  - `10.65.8.0/21` via `10.65.6.4` (A7, A8, A9, Schumann)
+  - `10.65.16.0/22` via `10.65.18.202` (sayap Bawah)
+  - `10.65.20.0/22` via `10.65.23.2` (sayap Kanan)
+
+  - `10.65.24.0/24` via `10.65.24.130` (sayap Atas)
+  - `0.0.0.0/0` via `10.65.24.130` (internet)
+- **Cybertia**
+  - `10.65.0.0/19` via `10.65.24.129`
+- **Navi**
+  - `0.0.0.0/0` via `10.65.23.1`
+- **Psyche**
+  - `10.65.4.0/22` via `10.65.6.3`
+  - `10.65.8.0/21` via `10.65.6.4`
+  - `0.0.0.0/0` via `10.65.6.1`
+- **Copland**
+  - `10.65.0.0/22` via `10.65.6.2`
+  - `10.65.8.0/21` via `10.65.6.4`
+  - `0.0.0.0/0` via `10.65.6.1`
+- **Schumann**
+  - `10.65.0.0/22` via `10.65.6.2`
+  - `10.65.4.0/22` via `10.65.6.3`
+  - `10.65.12.0/22` via `10.65.8.10`
+  - `0.0.0.0/0` via `10.65.6.1`
+- **Accela**
+  - `0.0.0.0/0` via `10.65.8.9`
+- **Tachibana**
+  - `10.65.18.0/23` via `10.65.18.206`
+  - `0.0.0.0/0` via `10.65.18.201`
+- **Deus**
+  - `10.65.18.128/26`, `10.65.18.196/30`, dan `10.65.19.0/25` via `10.65.18.194`
+  - `0.0.0.0/0` via `10.65.18.205`
+- **Protocol7**
+  - `10.65.19.0/25` via `10.65.18.198`
+  - `0.0.0.0/0` via `10.65.18.193`
+- **Knights**
+  - `10.65.19.0/25` via `10.65.19.106`
+
+  - `0.0.0.0/0` via `10.65.18.197`
+- **Phantoma**
+  - `10.65.19.0/26` via `10.65.19.110`
+  - `0.0.0.0/0` via `10.65.19.105`
+- **Shibuya**
+  - `0.0.0.0/0` via `10.65.19.109`
+
+Totalnya cuma **33 route** untuk 13 router. Kalau tiap router harus simpan route ke semua subnet yang tidak terhubung langsung, bisa sampai sekitar 300 route (lumayan capek config-nya).
+
+### Contoh Konfigurasi (Wired)
+
+```
+interface fa0/0
+ ip address 10.65.24.129 255.255.255.252
+ no shutdown
+interface fa0/1
+ ip address 10.65.23.1 255.255.255.252
+ no shutdown
+interface fa1/0
+ ip address 10.65.18.201 255.255.255.252
+ no shutdown
+interface fa1/1
+ ip address 10.65.6.1 255.255.255.248
+ no shutdown
+ip route 10.65.0.0 255.255.252.0 10.65.6.2
+ip route 10.65.4.0 255.255.252.0 10.65.6.3
+ip route 10.65.8.0 255.255.248.0 10.65.6.4
+ip route 10.65.16.0 255.255.252.0 10.65.18.202
+ip route 10.65.20.0 255.255.252.0 10.65.23.2
+ip route 10.65.24.0 255.255.255.0 10.65.24.130
+ip route 0.0.0.0 0.0.0.0 10.65.24.130
+```
+
+
+### Verifikasi
+
+- `show ip interface brief` untuk cek semua interface sudah `up/up`.
+- `show ip route` untuk cek route static (`S`) dan default (`S*`) sudah terpasang.
+- `ping` dan `tracert` antar node, terus `ping 8.8.8.8`.
