@@ -555,10 +555,23 @@ Hasil pengujian membuktikan bahwa pembagian IP VLSM dan tabel routing yang diter
 ![image](./assets/vlsm/gns3-ping-success.png)
 
 File pengerjaan:
+- File Portable GNS3 Project: [Modul-4-K-03.gns3project](./Modul-4-K-03.gns3project)
+- File Topologi GNS3: [Modul-4-K-03.gns3](./Modul-4-K-03.gns3)
+- Folder Project GNS3: [projects/](./projects/)
 - File Spreadsheet Kelompok: [kelompok_k03.xlsx](./kelompok_k03.xlsx)
 - File CSV Rute: [kelompok_k03_rute.csv](./kelompok_k03_rute.csv)
 - File CSV VLSM: [kelompok_k03_vlsm.csv](./kelompok_k03_vlsm.csv)
 - Folder Script Konfigurasi Router & Host GNS3: [scripts/gns3/](./scripts/gns3/)
+
+#### C. Petunjuk Menjalankan Project GNS3
+1. Buka aplikasi **GNS3** (versi 2.2.x atau 3.0.x).
+2. Pilih menu **File** $\rightarrow$ **Import portable project** $\rightarrow$ pilih file **`Modul-4-K-03.gns3project`**.
+3. Atau buka langsung file topologi **`Modul-4-K-03.gns3`** pada folder `projects/Modul-4-K-03/`.
+4. Seluruh node (13 router + 25 host) telah menggunakan image docker **`ardhptr21/alpinet:latest`** dengan script konfigurasi otomatis tersimpan pada direktori `/root/<nama_node>.sh`.
+5. Saat node dinyalakan (*Start*), konfigurasi IP dan routing akan dieksekusi secara otomatis oleh container. Untuk menjalankan ulang konfigurasi secara manual pada terminal node:
+   ```sh
+   sh /root/<nama_node>.sh
+   ```
 
 ---
 

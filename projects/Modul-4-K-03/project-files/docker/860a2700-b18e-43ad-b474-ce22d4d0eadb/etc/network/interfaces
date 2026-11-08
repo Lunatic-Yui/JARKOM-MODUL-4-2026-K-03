@@ -1,0 +1,24 @@
+# Network configuration for Cyberia
+# Script equivalent also available at /root/cyberia.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+
+auto eth1
+iface eth1 inet static
+	address 10.65.14.1
+	netmask 255.255.255.128
+
+auto eth2
+iface eth2 inet static
+	address 10.65.16.57
+	netmask 255.255.255.252
+	up sysctl -w net.ipv4.ip_forward=1
+	up ip route add 10.65.0.0/19 via 10.65.16.58 dev eth2
+	up iptables -t nat -F
+	up iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+

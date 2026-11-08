@@ -1,0 +1,19 @@
+# Network configuration for Accela
+# Script equivalent also available at /root/accela.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.16.62
+	netmask 255.255.255.252
+	gateway 10.65.16.61
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+
+auto eth1
+iface eth1 inet static
+	address 10.65.4.1
+	netmask 255.255.252.0
+	up sysctl -w net.ipv4.ip_forward=1
+

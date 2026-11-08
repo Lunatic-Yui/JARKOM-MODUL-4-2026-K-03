@@ -1,0 +1,13 @@
+# Network configuration for Hodgeson
+# Script equivalent also available at /root/hodgeson.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.15.131
+	netmask 255.255.255.192
+	gateway 10.65.15.129
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+

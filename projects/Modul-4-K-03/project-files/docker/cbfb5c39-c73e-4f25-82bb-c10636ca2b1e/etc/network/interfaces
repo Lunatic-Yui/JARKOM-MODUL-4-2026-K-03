@@ -1,0 +1,19 @@
+# Network configuration for Shibuya
+# Script equivalent also available at /root/shibuya.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.16.90
+	netmask 255.255.255.252
+	gateway 10.65.16.89
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+
+auto eth1
+iface eth1 inet static
+	address 10.65.15.1
+	netmask 255.255.255.192
+	up sysctl -w net.ipv4.ip_forward=1
+

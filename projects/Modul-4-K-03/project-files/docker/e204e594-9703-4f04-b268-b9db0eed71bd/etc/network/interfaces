@@ -1,0 +1,13 @@
+# Network configuration for Akashic
+# Script equivalent also available at /root/akashic.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.16.42
+	netmask 255.255.255.248
+	gateway 10.65.16.41
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+
