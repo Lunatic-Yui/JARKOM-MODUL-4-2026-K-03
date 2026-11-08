@@ -1,0 +1,13 @@
+# Network configuration for Denpa
+# Script equivalent also available at /root/denpa.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.4.3
+	netmask 255.255.252.0
+	gateway 10.65.4.1
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+

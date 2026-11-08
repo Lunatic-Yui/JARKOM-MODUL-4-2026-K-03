@@ -1,0 +1,29 @@
+# Network configuration for Navi
+# Script equivalent also available at /root/navi.sh
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address 10.65.16.66
+	netmask 255.255.255.252
+	gateway 10.65.16.65
+	up echo nameserver 8.8.8.8 > /etc/resolv.conf
+
+auto eth1
+iface eth1 inet static
+	address 10.65.12.1
+	netmask 255.255.255.0
+
+auto eth2
+iface eth2 inet static
+	address 10.65.15.65
+	netmask 255.255.255.192
+
+auto eth3
+iface eth3 inet static
+	address 10.65.13.1
+	netmask 255.255.255.0
+	up sysctl -w net.ipv4.ip_forward=1
+
